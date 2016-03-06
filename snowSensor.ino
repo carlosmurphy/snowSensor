@@ -16,11 +16,12 @@
 LSM9DS1 imu;
 
 ////////////////// TMP006 object creation, temp sensor//////////////////////
-Adafruit_TMP006 thermopile;
+Adafruit_TMP006 thermopile(0x44); //default address is 0x40
+// addr1 pin must be connected to vcc addr0 to gnd
 //Adafruit_TMP006 tmp006(0x41);  // start with a diferent i2c address!
 
 ///////////////////Create an instance of the humidity sensor/////////////////////
-HTU21D humidity;
+HTU21D humidity; //i2c address 0x40
 
 // //////////////////SFE_BMP180 object, pressure sensor////////////////////
 SFE_BMP180 pressure;
@@ -38,8 +39,8 @@ unsigned int ms;  // Integration ("shutter") time in milliseconds
 // SDO_XM and SDO_G are both pulled high, so our addresses are:
 #define LSM9DS1_M	0x1E // Would be 0x1C if SDO_M is LOW
 #define LSM9DS1_AG	0x6B // Would be 0x6A if SDO_AG is LOW
-// Earth's magnetic field varies by location. Add or subtract 
-// a declination to get a more accurate heading. Calculate 
+// Earth's magnetic field varies by location. Add or subtract
+// a declination to get a more accurate heading. Calculate
 // your's here:
 // http://www.ngdc.noaa.gov/geomag-web/#declination
 #define DECLINATION -8.58 // Declination (degrees) in Boulder, CO.
@@ -50,10 +51,10 @@ unsigned int ms;  // Integration ("shutter") time in milliseconds
 ////////////////////////////
 #define PRINT_CALCULATED
 //#define PRINT_RAW
-#define PRINT_SPEED 500 // xxx ms between prints
+#define PRINT_SPEED 2000 // xxx ms between prints
 
 void setup() {
-  
+
 //Starting the Serial Port
 Serial.begin(9600);
 //Starting all the sensors
@@ -75,7 +76,7 @@ Serial.begin(9600);
       ;
   }
   //////////////////////// starting thermopile sensor //////////////////////////////
-  
+
   // you can also use tmp006.begin(TMP006_CFG_1SAMPLE) or 2SAMPLE/4SAMPLE/8SAMPLE to have
   // lower precision, higher rate sampling. default is TMP006_CFG_16SAMPLE which takes
   // 4 seconds per reading (16 samples)
@@ -83,7 +84,7 @@ Serial.begin(9600);
     Serial.println("No temp006 found");
     while (1); //freeze
   }
-  
+
   //////////////////////////////// start humidity sensor //////////////////////////////
   humidity.begin();
 
@@ -101,7 +102,7 @@ Serial.begin(9600);
   // You can pass nothing to light.begin() for the default I2C address (0x39),
   // or use one of the following presets if you have changed
   // the ADDR jumper on the board:
-  
+
   // TSL2561_ADDR_0 address with '0' shorted on board (0x29)
   // TSL2561_ADDR   default address (0x39)
   // TSL2561_ADDR_1 address with '1' shorted on board (0x49)
@@ -130,10 +131,10 @@ if (light.getID(ID))
 
   // The light sensor has a default integration time of 402ms,
   // and a default gain of low (1X).
-  
+
   // If you would like to change either of these, you can
   // do so using the setTiming() command.
-  
+
   // If gain = false (0), device is set to low gain (1X)
   // If gain = high (1), device is set to high gain (16X)
 
@@ -148,15 +149,15 @@ if (light.getID(ID))
 
   // setTiming() will set the third parameter (ms) to the
   // requested integration time in ms (this will be useful later):
-  
+
   Serial.println("Set timing...");
   light.setTiming(gain,time,ms);
 
   // To start taking measurements, power up the sensor:
-  
+
   Serial.println("Powerup...");
   light.setPowerUp();
-  
+
   // The sensor will now gather light during the integration time.
   // After the specified time, you can retrieve the result from the sensor.
   // Once a measurement occurs, another integration period will start.
@@ -169,21 +170,21 @@ if (imu.accelAvailable())
   {
     imu.readAccel();
   }
-  
+
   // imu.gyroAvailable() returns 1 if new gyroscope
   // data is ready to be read. 0 otherwise.
   if (imu.gyroAvailable())
   {
     imu.readGyro();
   }
-  
+
   // imu.magAvailable() returns 1 if new magnetometer
   // data is ready to be read. 0 otherwise.
   if (imu.magAvailable())
   {
     imu.readMag();
   }
-  
+
   // imu.tempAvailable() returns 1 if new temperature sensor
   // data is ready to be read. 0 otherwise.
   if (imu.tempAvailable())
@@ -216,15 +217,17 @@ if (imu.accelAvailable())
   Serial.print(imu.temperature);
   Serial.print(" \t\t\t| ");
   Serial.println();
+
 ////////////////////dumping thermopile data //////////////////////////////////////////////
 // Grab temperature measurements and print them.
   float objt = thermopile.readObjTempC();
   Serial.print("Object Temperature: "); Serial.print(objt); Serial.println("*C");
   float diet = thermopile.readDieTempC();
   Serial.print("Die Temperature: "); Serial.print(diet); Serial.println("*C");
+
  //////////////////////////////////////dumping humidity data///////////////////////////////////
  float humd = humidity.readHumidity();
-  float temp = humidity.readTemperature();
+ float temp = humidity.readTemperature();
 
   Serial.print(" Temperature:");
   Serial.print(temp, 1);
@@ -233,9 +236,13 @@ if (imu.accelAvailable())
   Serial.print(humd, 1);
   Serial.print("%");
   Serial.println();
+
+ //if humd or temp = 999 then there is a CRC error
+ //if humd or temp = 998 if the sensor is not detected
+
  //////////////////////////////////////dumping pressure data ///////////////////////////////////
  double a,P;
-  
+
   // Get a new pressure reading:
 
   P = getPressure();
@@ -244,66 +251,67 @@ if (imu.accelAvailable())
   // the new reading and the baseline reading:
 
   a = pressure.altitude(P,baseline);
-  
+
   Serial.print("relative altitude: ");
   if (a >= 0.0) Serial.print(" "); // add a space for positive numbers
   Serial.print(a,1);
   Serial.print(" meters, ");
-  if (a >= 0.0) Serial.print(" "); // add a space for positive numbers
-  Serial.print(a*3.28084,0);
-  Serial.println(" feet");
+  Serial.print("Pressure: ");
+  Serial.print(P);
+  Serial.println("mbars");
+
   //////////////////////////////dumping light data ////////////////////////////////////////////////
   // Wait between measurements before retrieving the result
   // (You can also configure the sensor to issue an interrupt
   // when measurements are complete)
-  
+
   // This sketch uses the TSL2561's built-in integration timer.
   // You can also perform your own manual integration timing
   // by setting "time" to 3 (manual) in setTiming(),
   // then performing a manualStart() and a manualStop() as in the below
   // commented statements:
-  
+
   // ms = 1000;
   // light.manualStart();
   //delay(ms);
   // light.manualStop();
-  
+
   // Once integration is complete, we'll retrieve the data.
-  
+
   // There are two light sensors on the device, one for visible light
   // and one for infrared. Both sensors are needed for lux calculations.
-  
+
   // Retrieve the data from the device:
 
   unsigned int data0, data1;
-  
+
   if (light.getData(data0,data1))
   {
     // getData() returned true, communication was successful
-    
-    Serial.print("data0: ");
+
+    Serial.print("EO?: ");
     Serial.print(data0);
-    Serial.print(" data1: ");
+    Serial.print(" IR?: ");
     Serial.print(data1);
-  
+
     // To calculate lux, pass all your settings and readings
     // to the getLux() function.
-    
+
     // The getLux() function will return 1 if the calculation
     // was successful, or 0 if one or both of the sensors was
     // saturated (too much light). If this happens, you can
     // reduce the integration time and/or gain.
     // For more information see the hookup guide at: https://learn.sparkfun.com/tutorials/getting-started-with-the-tsl2561-luminosity-sensor
-  
+
     double lux;    // Resulting lux value
     boolean good;  // True if neither sensor is saturated
-    
+
     // Perform lux calculation:
 
     good = light.getLux(gain,ms,data0,data1,lux);
-    
+
     // Print out the results:
-	
+
     Serial.print(" lux: ");
     Serial.print(lux);
     if (good) Serial.println(" (good)"); else Serial.println(" (BAD)");
@@ -316,8 +324,8 @@ if (imu.accelAvailable())
     printError(error);
   }
   /////////////////////////////////////////////////////////////
-  
-  
+
+
 delay(PRINT_SPEED);
 }
 
@@ -390,12 +398,12 @@ void setupAccel()
   // 3 = 119 Hz   6 = 952 Hz
   imu.settings.accel.sampleRate = 1; // Set accel to 10Hz.
   // [bandwidth] sets the anti-aliasing filter bandwidth.
-  // Accel cutoff freqeuncy can be any value between -1 - 3. 
+  // Accel cutoff freqeuncy can be any value between -1 - 3.
   // -1 = bandwidth determined by sample rate
   // 0 = 408 Hz   2 = 105 Hz
   // 1 = 211 Hz   3 = 50 Hz
   imu.settings.accel.bandwidth = 0; // BW = 408Hz
-  // [highResEnable] enables or disables high resolution 
+  // [highResEnable] enables or disables high resolution
   // mode for the acclerometer.
   imu.settings.accel.highResEnable = false; // Disable HR
   // [highResBandwidth] sets the LP cutoff frequency of
@@ -404,7 +412,7 @@ void setupAccel()
   // LP cutoff is set to a factor of sample rate
   // 0 = ODR/50    2 = ODR/9
   // 1 = ODR/100   3 = ODR/400
-  imu.settings.accel.highResBandwidth = 0;  
+  imu.settings.accel.highResBandwidth = 0;
 }
 
 void setupMag()
@@ -422,7 +430,7 @@ void setupMag()
   // 2 = 2.5 Hz    6 = 40 Hz
   // 3 = 5 Hz      7 = 80 Hz
   imu.settings.mag.sampleRate = 5; // Set OD rate to 20Hz
-  // [tempCompensationEnable] enables or disables 
+  // [tempCompensationEnable] enables or disables
   // temperature compensation of the magnetometer.
   imu.settings.mag.tempCompensationEnable = false;
   // [XYPerformance] sets the x and y-axis performance of the
@@ -456,7 +464,7 @@ uint16_t initLSM9DS1()
   setupAccel(); // Set up accelerometer parameters
   setupMag(); // Set up magnetometer parameters
   setupTemperature(); // Set up temp sensor parameter
-  
+
   return imu.begin();
 }
 
@@ -467,7 +475,7 @@ double getPressure()
   double T,P,p0,a;
 
   // You must first get a temperature measurement to perform a pressure reading.
-  
+
   // Start a temperature measurement:
   // If request is successful, the number of ms to wait is returned.
   // If request is unsuccessful, 0 is returned.
@@ -530,7 +538,7 @@ void printError(byte error)
   Serial.print("I2C error: ");
   Serial.print(error,DEC);
   Serial.print(", ");
-  
+
   switch(error)
   {
     case 0:
@@ -552,4 +560,3 @@ void printError(byte error)
       Serial.println("unknown error");
   }
 }
-
