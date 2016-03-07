@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <SPI.h>
+#include <SD.h>
 #include <SparkFunLSM9DS1.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_TMP006.h"
@@ -10,6 +11,11 @@
 //Because the M0 core is stupid...
 #define Serial SerialUSB
 
+//pin used by the feather for SS on the SPI bus
+#define cardSelect 4
+
+//creating file object to write into the SD card
+File logfile;
 
 
 //////////// Use the LSM9DS1 class to create an object. 9 dof sensor///////////////////////
@@ -57,6 +63,37 @@ void setup() {
 
 //Starting the Serial Port
 Serial.begin(9600);
+//built in feather LED pin
+ pinMode(8, OUTPUT);
+
+////////////////////////////staring SD card /////////////////////////////////
+ pinMode(13, OUTPUT); //don't really know it was in the example?
+
+ // see if the card is present and can be initialized:
+ if (!SD.begin(cardSelect)) {
+   Serial.println("Card init. failed!");
+ }
+ char filename[15];
+ strcpy(filename, "SENSOR00.TXT");
+ for (uint8_t i = 0; i < 100; i++) {
+   filename[6] = '0' + i/10;
+   filename[7] = '0' + i%10;
+   // create if does not exist, do not open existing, write, sync after write
+   if (! SD.exists(filename)) {
+     break;
+   }
+ }
+
+ logfile = SD.open(filename, FILE_WRITE);
+ if( ! logfile ) {
+   Serial.print("Couldnt create ");
+   Serial.println(filename);
+ }
+ Serial.print("Writing to ");
+ Serial.println(filename);
+ pinMode(13, OUTPUT);                  // twice for some reason, still dont know what pin 13 is
+ Serial.println("SD Card Ready!");
+
 //Starting all the sensors
 
 ////////////////////// starting the 9 dof sensor ///////////////////
@@ -165,6 +202,10 @@ if (light.getID(ID))
 }
 
 void loop() {
+  
+  // make an empty string for assembling the data to log:
+  String dataString = "";
+  
 ///////////dumping IMU data ////////////////////////////////////
 if (imu.accelAvailable())
   {
@@ -217,13 +258,22 @@ if (imu.accelAvailable())
   Serial.print(imu.temperature);
   Serial.print(" \t\t\t| ");
   Serial.println();
-
+  
+  //adding data to the string for writing to the SD card
+  dataString += String(imu.calcAccel(imu.az),5);
+  dataString += ",";
+  
+  
 ////////////////////dumping thermopile data //////////////////////////////////////////////
 // Grab temperature measurements and print them.
   float objt = thermopile.readObjTempC();
   Serial.print("Object Temperature: "); Serial.print(objt); Serial.println("*C");
   float diet = thermopile.readDieTempC();
   Serial.print("Die Temperature: "); Serial.print(diet); Serial.println("*C");
+  
+    //adding data to the string for writing to the SD card
+  dataString += String(objt,5);
+  dataString += ",";
 
  //////////////////////////////////////dumping humidity data///////////////////////////////////
  float humd = humidity.readHumidity();
@@ -236,6 +286,10 @@ if (imu.accelAvailable())
   Serial.print(humd, 1);
   Serial.print("%");
   Serial.println();
+  
+    //adding data to the string for writing to the SD card
+  dataString += String(humd,5);
+  dataString += ",";
 
  //if humd or temp = 999 then there is a CRC error
  //if humd or temp = 998 if the sensor is not detected
@@ -259,7 +313,11 @@ if (imu.accelAvailable())
   Serial.print("Pressure: ");
   Serial.print(P);
   Serial.println("mbars");
-
+  
+  //adding data to the string for writing to the SD card
+  dataString += String(a,5);
+  dataString += ",";
+  
   //////////////////////////////dumping light data ////////////////////////////////////////////////
   // Wait between measurements before retrieving the result
   // (You can also configure the sensor to issue an interrupt
@@ -284,6 +342,8 @@ if (imu.accelAvailable())
   // Retrieve the data from the device:
 
   unsigned int data0, data1;
+  double lux;    // Resulting lux value
+  boolean good;  // True if neither sensor is saturated
 
   if (light.getData(data0,data1))
   {
@@ -303,9 +363,6 @@ if (imu.accelAvailable())
     // reduce the integration time and/or gain.
     // For more information see the hookup guide at: https://learn.sparkfun.com/tutorials/getting-started-with-the-tsl2561-luminosity-sensor
 
-    double lux;    // Resulting lux value
-    boolean good;  // True if neither sensor is saturated
-
     // Perform lux calculation:
 
     good = light.getLux(gain,ms,data0,data1,lux);
@@ -314,6 +371,11 @@ if (imu.accelAvailable())
 
     Serial.print(" lux: ");
     Serial.print(lux);
+    
+  //adding data to the string for writing to the SD card
+  dataString += lux;
+  dataString += " , ";
+  
     if (good) Serial.println(" (good)"); else Serial.println(" (BAD)");
   }
   else
@@ -323,11 +385,16 @@ if (imu.accelAvailable())
     byte error = light.getError();
     printError(error);
   }
-  /////////////////////////////////////////////////////////////
 
-
+///////////////////////Writing things to the sd card////////////////////////////////////////
+digitalWrite(8, HIGH); //LED on for the writing to the card
+logfile.println(dataString);
+logfile.flush();       //Force write everything to the SD card
+digitalWrite(8, LOW);  //LED off after the write is finished
+ 
+// wait around for the next go
 delay(PRINT_SPEED);
-}
+}//end of loop//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////// LSM9DS1 sensor settings/////////////////////////////////////////////
 void setupDevice()
