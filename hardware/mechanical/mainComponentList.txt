@@ -1,0 +1,19 @@
+processing/power:
+ATmega32u4 - 44QFN
+crystal - 8mhz
+battery - 1 cell lipo
+usb charger - mcp73831/2
+power control - spx3819-3.3
+power indicator (1) - green LED
+activity/readiness indicator (1) - blue LED
+
+sensors:
+imu - LSM9DS1
+baro - 
+thermometer - 
+humidity - 
+photocell - 
+LED for photocell - 
+IR sensor+source - 
+capacitance - 
+resistance? - 
